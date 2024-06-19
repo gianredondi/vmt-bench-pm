@@ -1,0 +1,63 @@
+(declare-sort node 0)
+
+
+(declare-fun __grant_msg (node) Bool)
+(declare-fun __held () Bool)
+(declare-fun __holds_lock (node) Bool)
+(declare-fun __lock_msg (node) Bool)
+(declare-fun __unlock_msg (node) Bool)
+
+(declare-fun grant_msg (node) Bool)
+(declare-fun held () Bool)
+(declare-fun holds_lock (node) Bool)
+(declare-fun lock_msg (node) Bool)
+(declare-fun unlock_msg (node) Bool)
+
+(define-fun .grant_msg ((V0 node)) Bool (! (__grant_msg V0) :next grant_msg))
+(define-fun .held () Bool (! __held :next held))
+(define-fun .holds_lock ((V0 node)) Bool (! (__holds_lock V0) :next holds_lock))
+(define-fun .lock_msg ((V0 node)) Bool (! (__lock_msg V0) :next lock_msg))
+(define-fun .unlock_msg ((V0 node)) Bool (! (__unlock_msg V0) :next unlock_msg))
+
+(define-fun .prop () Bool (! 
+ (let (($v (forall ((X node) (Y node)) (=> (and (__holds_lock X) (__holds_lock Y)) (= X Y)))
+ ))
+ (and $v))
+ :invar-property 0))
+
+(define-fun .init () Bool (! 
+ (let (($v (and (forall ((V0 node)) (= (__lock_msg V0) false)) (forall ((V0 node)) (= (__unlock_msg V0) false)) (forall ((V0 node)) (= (__grant_msg V0) false)) (forall ((V0 node)) (= (__holds_lock V0) false)) (= __held false))
+ ))
+ (and $v))
+ :init true))
+
+(define-fun .action_lock () Bool (! 
+ (let (($v (exists ((n node)) (forall ((V0 node)) (= (lock_msg V0) (ite (= V0 n) true (__lock_msg V0)))))
+ ))
+ (and $v))
+ :action lock))
+
+(define-fun .action_recv_grant () Bool (! 
+ (let (($v (exists ((n node)) (and (forall ((V0 node)) (= (grant_msg V0) (ite (= V0 n) false (__grant_msg V0)))) (forall ((V0 node)) (= (holds_lock V0) (ite (= V0 n) true (__holds_lock V0)))) (__grant_msg n)))
+ ))
+ (and $v))
+ :action recv_grant))
+
+(define-fun .action_recv_lock () Bool (! 
+ (let (($v (exists ((sender node)) (and (= held true) (forall ((V0 node)) (= (lock_msg V0) (ite (= V0 sender) false (__lock_msg V0)))) (forall ((V0 node)) (= (grant_msg V0) (ite (= V0 sender) true (__grant_msg V0)))) (__lock_msg sender) (not __held)))
+ ))
+ (and $v))
+ :action recv_lock))
+
+(define-fun .action_recv_unlock () Bool (! 
+ (let (($v (exists ((sender node)) (and (forall ((V0 node)) (= (unlock_msg V0) (ite (= V0 sender) false (__unlock_msg V0)))) (= held false) (__unlock_msg sender)))
+ ))
+ (and $v))
+ :action recv_unlock))
+
+(define-fun .action_unlock () Bool (! 
+ (let (($v (exists ((n node)) (and (forall ((V0 node)) (= (holds_lock V0) (ite (= V0 n) false (__holds_lock V0)))) (forall ((V0 node)) (= (unlock_msg V0) (ite (= V0 n) true (__unlock_msg V0)))) (__holds_lock n)))
+ ))
+ (and $v))
+ :action unlock))
+

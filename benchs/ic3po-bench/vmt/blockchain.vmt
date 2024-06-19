@@ -1,0 +1,91 @@
+(declare-sort block 0)
+(declare-sort node 0)
+(declare-sort time 0)
+(declare-sort transaction 0)
+
+
+(declare-fun __block_confirmed (node block time) Bool)
+(declare-fun __block_found (node block time) Bool)
+(declare-fun __broadcastable (node block time) Bool)
+(declare-fun __broadcasted (node) Bool)
+(declare-fun __transaction_confirmed (transaction node) Bool)
+(declare-fun __transaction_in_block (transaction block) Bool)
+
+(declare-fun block_confirmed (node block time) Bool)
+(declare-fun block_found (node block time) Bool)
+(declare-fun broadcastable (node block time) Bool)
+(declare-fun broadcasted (node) Bool)
+(declare-fun transaction_confirmed (transaction node) Bool)
+(declare-fun transaction_in_block (transaction block) Bool)
+
+(define-fun .block_confirmed ((V0 node) (V1 block) (V2 time)) Bool (! (__block_confirmed V0 V1 V2) :next block_confirmed))
+(define-fun .block_found ((V0 node) (V1 block) (V2 time)) Bool (! (__block_found V0 V1 V2) :next block_found))
+(define-fun .broadcastable ((V0 node) (V1 block) (V2 time)) Bool (! (__broadcastable V0 V1 V2) :next broadcastable))
+(define-fun .broadcasted ((V0 node)) Bool (! (__broadcasted V0) :next broadcasted))
+(define-fun .transaction_confirmed ((V0 transaction) (V1 node)) Bool (! (__transaction_confirmed V0 V1) :next transaction_confirmed))
+(define-fun .transaction_in_block ((V0 transaction) (V1 block)) Bool (! (__transaction_in_block V0 V1) :next transaction_in_block))
+
+(declare-fun honest (node) Bool)
+(declare-fun le (time time) Bool)
+(declare-fun leader (node time) Bool)
+(declare-fun transaction_time (transaction time) Bool)
+
+(define-fun .honest ((V0 node)) Bool (! (honest V0) :global true))
+(define-fun .le ((V0 time) (V1 time)) Bool (! (le V0 V1) :global true))
+(define-fun .leader ((V0 node) (V1 time)) Bool (! (leader V0 V1) :global true))
+(define-fun .transaction_time ((V0 transaction) (V1 time)) Bool (! (transaction_time V0 V1) :global true))
+
+(define-fun .prop () Bool (! 
+ (let (($v (and (forall ((B block) (N1 node) (N2 node) (T time)) (=> (and (honest N1) (honest N2)) (or (and (__block_confirmed N1 B T) (__block_confirmed N2 B T)) (and (not (__block_confirmed N1 B T)) (not (__block_confirmed N2 B T)))))) (forall ((N1 node) (N2 node) (TR transaction)) (=> (and (honest N1) (honest N2)) (or (and (__transaction_confirmed TR N1) (__transaction_confirmed TR N2)) (and (not (__transaction_confirmed TR N1)) (not (__transaction_confirmed TR N2)))))) (forall ((N node) (N1 node) (T1 time) (T2 time) (TR transaction)) (=> (and (honest N) (leader N T2) (transaction_time TR T1) (le T1 T2) (__broadcasted N) (honest N1)) (__transaction_confirmed TR N1))))
+ ))
+ (and $v))
+ :invar-property 0))
+
+(define-fun .axiom () Bool (! 
+ (let (($v (and (forall ((X time)) (le X X)) (forall ((X time) (Y time) (Z time)) (=> (and (le X Y) (le Y Z)) (le X Z))) (forall ((X time) (Y time)) (=> (and (le X Y) (le Y X)) (= X Y))) (forall ((X time) (Y time)) (or (le X Y) (le Y X))) (forall ((N1 node) (N2 node) (T time)) (=> (and (leader N1 T) (leader N2 T)) (= N1 N2))) (forall ((N node) (T1 time) (T2 time)) (=> (and (leader N T1) (leader N T2)) (= T1 T2))) (forall ((T1 time) (T2 time) (TR transaction)) (=> (and (transaction_time TR T1) (transaction_time TR T2)) (= T1 T2))))
+ ))
+ (and $v))
+ :axiom true))
+
+(define-fun .init () Bool (! 
+ (let (($v (and (forall ((V0 node) (V1 block) (V2 time)) (= (__block_found V0 V1 V2) false)) (forall ((V0 node) (V1 block) (V2 time)) (= (__block_confirmed V0 V1 V2) false)) (forall ((V0 transaction) (V1 block)) (= (__transaction_in_block V0 V1) false)) (forall ((V0 transaction) (V1 node)) (= (__transaction_confirmed V0 V1) false)) (forall ((V0 node)) (= (__broadcasted V0) false)) (forall ((V0 node) (V1 block) (V2 time)) (= (__broadcastable V0 V1 V2) false)))
+ ))
+ (and $v))
+ :init true))
+
+(define-fun .action_add_transaction () Bool (! 
+ (let (($v (exists ((b block) (tr transaction)) (forall ((V0 transaction) (V1 block)) (= (transaction_in_block V0 V1) (ite (and (= V0 tr) (= V1 b)) true (__transaction_in_block V0 V1)))))
+ ))
+ (and $v))
+ :action add_transaction))
+
+(define-fun .action_begin_broadcast () Bool (! 
+ (let (($v (exists ((b block) (n node) (t time)) (and (forall ((V0 node) (V1 block) (V2 time)) (= (broadcastable V0 V1 V2) (ite (and (= V0 n) (= V1 b) (= V2 t)) true (__broadcastable V0 V1 V2)))) (leader n t) (__block_found n b t) (not (__broadcasted n))))
+ ))
+ (and $v))
+ :action begin_broadcast))
+
+(define-fun .action_begin_broadcast_adversary () Bool (! 
+ (let (($v (exists ((b block) (n node) (t time)) (and (forall ((V0 node) (V1 block) (V2 time)) (= (broadcastable V0 V1 V2) (ite (and (= V0 n) (= V1 b) (= V2 t)) true (__broadcastable V0 V1 V2)))) (not (honest n))))
+ ))
+ (and $v))
+ :action begin_broadcast_adversary))
+
+(define-fun .action_byzantine_broadcast () Bool (! 
+ (let (($v (exists ((b block) (n node) (t time)) (and (forall ((V0 node)) (= (broadcasted V0) (ite (= V0 n) true (__broadcasted V0)))) (forall ((V0 node) (V1 block) (V2 time)) (= (broadcastable V0 V1 V2) (ite (and (= V0 n) (= V1 b) (= V2 t)) false (__broadcastable V0 V1 V2)))) (forall ((V0 transaction) (V1 node)) (= (transaction_confirmed V0 V1) (or (__transaction_confirmed V0 V1) (ite (honest n) (__transaction_in_block V0 b) (__transaction_confirmed V0 V1))))) (__broadcastable n b t) (forall ((T time) (TR transaction)) (=> (and (honest n) (transaction_time TR T) (le T t) (not (__transaction_confirmed TR n))) (__transaction_in_block TR b))) (forall ((T time) (TR transaction)) (=> (and (honest n) (__transaction_in_block TR b)) (and (transaction_time TR T) (le T t) (not (__transaction_confirmed TR n))))) (forall ((X0 node) (X1 block) (X2 time)) (or (not (block_confirmed X0 X1 X2)) (__block_confirmed X0 X1 X2) (= X2 t))) (forall ((X0 node) (X1 block) (X2 time)) (or (block_confirmed X0 X1 X2) (not (__block_confirmed X0 X1 X2)) (= X2 t))) (forall ((B1 block) (B2 block) (N node)) (=> (honest N) (not (and (not (= B1 B2)) (block_confirmed N B1 t) (block_confirmed N B2 t))))) (forall ((B block) (N1 node) (N2 node)) (=> (and (honest N1) (honest N2)) (or (and (block_confirmed N1 b t) (block_confirmed N2 b t)) (and (not (block_confirmed N1 B t)) (not (block_confirmed N2 B t)))))) (forall ((N node)) (=> (and (honest n) (honest N)) (block_confirmed N b t)))))
+ ))
+ (and $v))
+ :action byzantine_broadcast))
+
+(define-fun .action_find_block () Bool (! 
+ (let (($v (exists ((b block) (n node) (t time)) (and (forall ((V0 node) (V1 block) (V2 time)) (= (block_found V0 V1 V2) (ite (and (= V0 n) (= V1 b) (= V2 t)) true (__block_found V0 V1 V2)))) (leader n t)))
+ ))
+ (and $v))
+ :action find_block))
+
+(define-fun .action_sabotage () Bool (! 
+ (let (($v (exists ((n node)) (and (not (honest n)) (forall ((X0 node) (X1 block) (X2 time)) (or (not (block_confirmed X0 X1 X2)) (__block_confirmed X0 X1 X2) (= X0 n))) (forall ((X0 node) (X1 block) (X2 time)) (or (block_confirmed X0 X1 X2) (not (__block_confirmed X0 X1 X2)) (= X0 n))) (forall ((X0 transaction) (X1 node)) (or (not (transaction_confirmed X0 X1)) (__transaction_confirmed X0 X1) (= X1 n))) (forall ((X0 transaction) (X1 node)) (or (transaction_confirmed X0 X1) (not (__transaction_confirmed X0 X1)) (= X1 n)))))
+ ))
+ (and $v))
+ :action sabotage))
+

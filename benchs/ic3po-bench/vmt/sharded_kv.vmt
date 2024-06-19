@@ -1,0 +1,47 @@
+(declare-sort key 0)
+(declare-sort node 0)
+(declare-sort value 0)
+
+
+(declare-fun __owner (node key) Bool)
+(declare-fun __table (node key value) Bool)
+(declare-fun __transfer_msg (node key value) Bool)
+
+(declare-fun owner (node key) Bool)
+(declare-fun table (node key value) Bool)
+(declare-fun transfer_msg (node key value) Bool)
+
+(define-fun .owner ((V0 node) (V1 key)) Bool (! (__owner V0 V1) :next owner))
+(define-fun .table ((V0 node) (V1 key) (V2 value)) Bool (! (__table V0 V1 V2) :next table))
+(define-fun .transfer_msg ((V0 node) (V1 key) (V2 value)) Bool (! (__transfer_msg V0 V1 V2) :next transfer_msg))
+
+(define-fun .prop () Bool (! 
+ (let (($v (forall ((K key) (N1 node) (N2 node) (V1 value) (V2 value)) (=> (and (__table N1 K V1) (__table N2 K V2)) (and (= N1 N2) (= V1 V2))))
+ ))
+ (and $v))
+ :invar-property 0))
+
+(define-fun .init () Bool (! 
+ (let (($v (and (forall ((V0 node) (V1 key) (V2 value)) (= (__table V0 V1 V2) false)) (forall ((V0 node) (V1 key) (V2 value)) (= (__transfer_msg V0 V1 V2) false)) (forall ((K key) (N1 node) (N2 node)) (=> (and (__owner N1 K) (__owner N2 K)) (= N1 N2))))
+ ))
+ (and $v))
+ :init true))
+
+(define-fun .action_put () Bool (! 
+ (let (($v (exists ((k key) (n node) (v value)) (and (forall ((V0 node) (V1 key) (V2 value)) (= (table V0 V1 V2) (ite (and (= V0 n) (= V1 k)) (= V2 v) (__table V0 V1 V2)))) (__owner n k)))
+ ))
+ (and $v))
+ :action put))
+
+(define-fun .action_recv_transfer_msg () Bool (! 
+ (let (($v (exists ((k key) (n node) (v value)) (and (forall ((V0 node) (V1 key) (V2 value)) (= (transfer_msg V0 V1 V2) (ite (and (= V0 n) (= V1 k) (= V2 v)) false (__transfer_msg V0 V1 V2)))) (forall ((V0 node) (V1 key) (V2 value)) (= (table V0 V1 V2) (ite (and (= V0 n) (= V1 k) (= V2 v)) true (__table V0 V1 V2)))) (forall ((V0 node) (V1 key)) (= (owner V0 V1) (ite (and (= V0 n) (= V1 k)) true (__owner V0 V1)))) (__transfer_msg n k v)))
+ ))
+ (and $v))
+ :action recv_transfer_msg))
+
+(define-fun .action_reshard () Bool (! 
+ (let (($v (exists ((k key) (n_new node) (n_old node) (v value)) (and (forall ((V0 node) (V1 key) (V2 value)) (= (table V0 V1 V2) (ite (and (= V0 n_old) (= V1 k) (= V2 v)) false (__table V0 V1 V2)))) (forall ((V0 node) (V1 key)) (= (owner V0 V1) (ite (and (= V0 n_old) (= V1 k)) false (__owner V0 V1)))) (forall ((V0 node) (V1 key) (V2 value)) (= (transfer_msg V0 V1 V2) (ite (and (= V0 n_new) (= V1 k) (= V2 v)) true (__transfer_msg V0 V1 V2)))) (__table n_old k v)))
+ ))
+ (and $v))
+ :action reshard))
+

@@ -1,0 +1,51 @@
+(declare-sort node 0)
+
+
+(declare-fun __holds (node) Bool)
+(declare-fun __replied (node node) Bool)
+(declare-fun __requested (node node) Bool)
+
+(declare-fun holds (node) Bool)
+(declare-fun replied (node node) Bool)
+(declare-fun requested (node node) Bool)
+
+(define-fun .holds ((V0 node)) Bool (! (__holds V0) :next holds))
+(define-fun .replied ((V0 node) (V1 node)) Bool (! (__replied V0 V1) :next replied))
+(define-fun .requested ((V0 node) (V1 node)) Bool (! (__requested V0 V1) :next requested))
+
+(define-fun .prop () Bool (! 
+ (let (($v (forall ((N1 node) (N2 node)) (=> (and (__holds N1) (__holds N2)) (= N1 N2)))
+ ))
+ (and $v))
+ :invar-property 0))
+
+(define-fun .init () Bool (! 
+ (let (($v (and (forall ((V0 node) (V1 node)) (= (__requested V0 V1) false)) (forall ((V0 node) (V1 node)) (= (__replied V0 V1) false)) (forall ((V0 node)) (= (__holds V0) false)))
+ ))
+ (and $v))
+ :init true))
+
+(define-fun .action_enter () Bool (! 
+ (let (($v (exists ((requester node)) (and (forall ((V0 node)) (= (holds V0) (ite (= V0 requester) true (__holds V0)))) (forall ((N node)) (=> (not (= N requester)) (__replied requester N)))))
+ ))
+ (and $v))
+ :action enter))
+
+(define-fun .action_leave () Bool (! 
+ (let (($v (exists ((requester node)) (and (forall ((V0 node)) (= (holds V0) (ite (= V0 requester) false (__holds V0)))) (forall ((V0 node) (V1 node)) (= (replied V0 V1) (ite (= V0 requester) false (__replied V0 V1)))) (__holds requester)))
+ ))
+ (and $v))
+ :action leave))
+
+(define-fun .action_reply () Bool (! 
+ (let (($v (exists ((requester node) (responder node)) (and (forall ((V0 node) (V1 node)) (= (requested V0 V1) (ite (and (= V0 requester) (= V1 responder)) false (__requested V0 V1)))) (forall ((V0 node) (V1 node)) (= (replied V0 V1) (ite (and (= V0 requester) (= V1 responder)) true (__replied V0 V1)))) (not (__replied requester responder)) (not (__holds responder)) (not (__replied responder requester)) (__requested requester responder) (not (= requester responder))))
+ ))
+ (and $v))
+ :action reply))
+
+(define-fun .action_request () Bool (! 
+ (let (($v (exists ((requester node) (responder node)) (and (forall ((V0 node) (V1 node)) (= (requested V0 V1) (ite (and (= V0 requester) (= V1 responder)) true (__requested V0 V1)))) (not (__requested requester responder)) (not (= requester responder))))
+ ))
+ (and $v))
+ :action request))
+

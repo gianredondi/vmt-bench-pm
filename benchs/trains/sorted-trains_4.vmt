@@ -1,0 +1,133 @@
+;;-----------------------------------------------------------------------------
+;;
+;; declaration of state variables
+;;
+;;-----------------------------------------------------------------------------
+(declare-sort track 0)
+(declare-sort route 0)
+
+;; Time elapse input
+(declare-const delta Real)
+
+;; The UsedBy static routing table as a rigid binary predicate 
+(declare-fun UsedBy (track route) Bool)
+
+;; The dynamic status of tracks
+(declare-fun IsFree (track) Bool)
+(declare-fun IsFree.next (track) Bool)
+(define-fun IsFree-current-next ((x track)) Bool (! (IsFree x) :next IsFree.next))
+
+;; The dynamic status of routes
+(declare-fun IsActive (route) Bool)
+(declare-fun IsActive.next (route) Bool)
+(define-fun IsActive-current-next ((x route)) Bool (! (IsActive x) :next IsActive.next))
+
+;; The time left to consume in the active state for each route
+(declare-fun TimeLeft (route) Real)
+(declare-fun TimeLeft.next (route) Real)
+(define-fun TimeLeft-current-next ((x route)) Real (! (TimeLeft x) :next TimeLeft.next))
+
+
+
+(define-fun init () Bool
+  (!
+   (forall ((i track) (j route))
+		(and
+        (IsFree i)
+		 (not (IsActive j))
+		 (= (TimeLeft j) 0)))
+   :init true)
+  )
+
+;;-----------------------------------------------------------------------------
+;; If can go active, go active.
+;; If active, go inactive.
+;; try to generalized to "liberazione elastica" 
+;;-----------------------------------------------------------------------------
+
+;; If not active and all used tracks are free, then go active and lock them.
+;;
+(define-fun rule_go_active () Bool
+  (!
+  (exists ((x1 route)) ; the route
+          (forall ((i track) ; M routes
+		   (j route)); N tracks
+                  (and
+		   
+		   (not (IsActive x1))
+		   (=>
+		    (UsedBy i x1)
+		    (IsFree i))
+		   (ite (= j x1)
+			(> (TimeLeft.next j) 0)
+			(= (TimeLeft.next j) (TimeLeft j)))
+
+		       (ite (= j x1)
+			    (IsActive.next j)
+			    (= (IsActive.next j) (IsActive j)))
+		       (ite (UsedBy i x1)
+			    (not (IsFree.next i))
+			    (= (IsFree.next i) (IsFree i)))
+		   )))
+  :trans true))
+
+(define-fun rule_wait () Bool
+ (!
+  (exists ((x1 route)) ; the route 
+          (forall ((i track) ; M tracks
+		   (j route)); N routes
+		  (and
+		   ( IsActive x1)
+		   (< 0 delta) (<= delta ( TimeLeft x1))
+		   (=> ( IsActive j) ; pick a delta
+		       (<= delta ( TimeLeft j)))
+		   
+		    (ite ( IsActive j); the timers of the other routes do not change
+			    (= ( TimeLeft.next j) (- ( TimeLeft j) delta))
+			    (= ( TimeLeft.next j) ( TimeLeft j)))
+		    (= ( IsActive.next j) ( IsActive j)) ; the routes do not change state
+		    (= ( IsFree.next i) ( IsFree i)) ; tracks to not change state
+		   )
+		  )
+	  )
+  :trans true))
+
+(define-fun rule_go_inactive () Bool
+(!
+  (exists ((x1 route)) ; the route
+          (forall ((i track) ; M tracks
+		   (j route)); N routes
+                  (and
+
+		   ( IsActive x1)
+		   (= ( TimeLeft x1) 0)
+		       (and
+			(ite (= j x1)
+			     (not ( IsActive.next j))
+			     (= ( IsActive.next j) ( IsActive j)))
+			(= ( TimeLeft.next j) ( TimeLeft j)))
+		       (ite (UsedBy i x1)
+			    ( IsFree.next i)
+			    (= ( IsFree.next i) ( IsFree i)))
+		   )))
+  :trans true))
+
+
+(declare-fun incompatible (route route) Bool)
+
+(define-fun axiom () Bool
+ (!   
+    (forall ((x1 route) (x2 route))
+		   (= (incompatible x1 x2)  (exists ((j track)) (and (UsedBy j x1) (UsedBy j x2)))
+   ))
+   :invar true)
+  )
+
+
+(define-fun prop0-true () Bool
+  (!
+   (forall ((x1 route) (x2 route))
+           (=> (and (not (= x1 x2)) ( IsActive x1) ( IsActive x2))
+	       (not (incompatible x1 x2))))
+   :invar-property 0)
+  )

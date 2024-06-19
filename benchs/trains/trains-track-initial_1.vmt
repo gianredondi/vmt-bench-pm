@@ -1,0 +1,161 @@
+;;-----------------------------------------------------------------------------
+;;
+;; declaration of state variables
+;;
+;;-----------------------------------------------------------------------------
+(declare-sort track 0)
+(declare-sort route 0)
+
+;; The UsedBy static routing table as a rigid binary predicate 
+(declare-fun UsedBy (track route) Bool)
+
+;; predicate 
+(declare-fun IsInitial (track) Bool)
+(declare-fun IsFinal (track) Bool)
+
+(define-fun axiom1 () Bool (!
+	(forall ((i track))
+		(not (and  (IsInitial i)  (IsFinal i) ))
+	)
+ :invar true) )
+
+ (define-fun axiom2 () Bool (! 
+	(forall ((j route))
+		(exists ((i track))
+			(and (UsedBy i j) (IsInitial i))
+	))
+	
+ :invar true))
+
+  (define-fun axiom3 () Bool (! 
+	(forall ((j route))
+		(exists ((i track))
+			(and (UsedBy i j) (IsFinal i))
+	))
+	
+ :invar true))
+
+;; The dynamic status of tracks
+(declare-fun IsFree (track) Bool)
+(declare-fun IsFree.next (track) Bool)
+(define-fun IsFree-current-next ((x track)) Bool (! (IsFree x) :next IsFree.next))
+
+;; The dynamic status of routes
+(declare-fun IsActive (route) Bool)
+(declare-fun IsActive.next (route) Bool)
+(define-fun IsActive-current-next ((r route)) Bool (! (IsActive r) :next IsActive.next))
+
+;; the current location 
+(declare-fun location (route) track)
+(declare-fun location.next (route) track)
+(define-fun location-current-next ((r route)) track (! (location r) :next location.next))
+
+;; the time on the clock on single route
+(declare-fun time (route) Real)
+(declare-fun time.next (route) Real)
+(define-fun time-current-next ((r route)) Real (! (time r) :next time.next))
+
+;; initial formula
+(define-fun init () Bool
+  (!
+   (forall ((i track) (j route))
+		(and
+         ( IsFree i)
+		 (not ( IsActive j))
+		 (IsInitial ( location j))
+		 (= ( time j) 0)
+		)
+	)
+   :init true)
+  )
+
+;; First rule
+
+(define-fun rule_go_active () Bool
+(!
+  (exists ((x1 route)) ; the route
+          (forall ((i track) ; M routes
+		   (j route)); N tracks
+            (and		   	
+		   (IsInitial ( location x1))
+		   (not ( IsActive x1))
+		   (=>
+		    (UsedBy i x1)
+		    ( IsFree i))
+		    (ite (= j x1)
+			    ( IsActive.next j)
+			    (= ( IsActive.next j) ( IsActive j)))
+		    (ite (UsedBy i x1)
+			    (not ( IsFree.next i))
+			    (= ( IsFree.next i) ( IsFree i)))
+			(ite (= j x1)
+				(= ( time.next j) (+ ( time j) 1))
+				(= ( time.next j) ( time j))
+			)
+
+			(= ( location j) ( location.next j))
+		   )))
+:trans true))
+
+
+;; aggiungere rule in cui si cambia location
+(define-fun rule_change_location () Bool
+  (!
+  (exists ((x1 route)) ; the route
+          (forall ((i track) ; M tracks
+		   (j route)); N routes
+           (and
+		   ( IsActive x1)
+		   (and
+			(= ( IsActive.next j) ( IsActive j))
+			(= ( IsFree.next i) ( IsFree i))
+			(ite (= j x1) 
+				(not (IsInitial ( location.next x1)))
+				(= ( location j) ( location.next j))
+			)
+			(ite (= j x1)
+				(= ( time.next j) (+ ( time j) 1))
+				(= ( time.next j) ( time j))
+			)
+
+		  )))
+  )
+  :trans true))
+
+;; rule go inactive
+(define-fun rule_go_inactive () Bool
+  (!
+  (exists ((x1 route)) ; the route
+          (forall ((i track) ; M tracks
+		   (j route)); N routes
+                  (and
+
+		   (IsFinal ( location x1))
+		   ( IsActive x1)
+			(ite (= j x1)
+			     (not ( IsActive.next j))
+			     (= ( IsActive.next j) ( IsActive j)))
+		    (ite (UsedBy i x1)
+			    ( IsFree.next i)
+			    (= ( IsFree.next i) ( IsFree i)))
+			(ite (= j x1)
+				(= ( time.next j) (+ ( time j) 1))
+				(= ( time.next j) ( time j))
+			)
+	
+			(= ( location j) ( location.next j)	
+		   )))
+  )
+:trans true))
+
+
+  (define-fun prop0-no-axioms () Bool
+  (!
+   (forall ((x1 route) (x2 route) (y1 track))
+		   
+		   (=> (and (not (= x1 x2)) (UsedBy y1 x2) (UsedBy y1 x1) )       
+		   (not (and ( IsActive x1) ( IsActive x2))))
+
+   )
+   :invar-property 0)
+  )

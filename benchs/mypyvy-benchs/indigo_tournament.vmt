@@ -1,0 +1,2 @@
+(declare-sort player 0)
+(declare-sort tournament 0)

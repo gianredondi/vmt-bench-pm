@@ -1,0 +1,293 @@
+;;-----------------------------------------------------------------------------
+;;
+;; declaration of state variables
+;;
+;;-----------------------------------------------------------------------------
+(declare-sort track 0)
+(declare-sort switch 0)
+(declare-sort route 0)
+
+;; Time elapse input
+(declare-const delta Real)
+
+;; The TrackUsedBy static routing table as a rigid binary predicate 
+(declare-fun TrackUsedBy (track route) Bool)
+(declare-fun SwitchReqDrctBy (switch route) Bool) ; deviatoio richiesto diritto
+(declare-fun SwitchReqRvrsBy (switch route) Bool) ; deviatoio richiesto rovescio
+(declare-fun IsTrackOfSwitch (track switch) Bool) ; il deviatoio e' su (almeno) una track
+
+;; The dynamic status of tracks
+(declare-fun TrackIsFree (track) Bool)
+(declare-fun TrackIsFree.next (track) Bool)
+(define-fun TrackIsFree-current-next ((t track)) Bool (! (TrackIsFree t) :next TrackIsFree.next))
+
+;; The dynamic status of routes
+(declare-fun RouteIsActive (route) Bool)
+(declare-fun RouteIsActive.next (route) Bool)
+(define-fun RouteIsActive-current-next ((r route)) Bool (! (RouteIsActive r) :next RouteIsActive.next))
+
+;; The dynamic status of routes
+(declare-fun RouteIsReady (route) Bool)
+(declare-fun RouteIsReady.next (route) Bool)
+(define-fun RouteIsReady-current-next ((r route)) Bool (! (RouteIsReady r) :next RouteIsReady.next)) 
+
+;; The time left to consume in the active state for each route
+(declare-fun TimeLeft (route) Real)
+(declare-fun TimeLeft.next (route) Real)
+(define-fun TimeLeft-current-next ((r route)) Real (! (TimeLeft r) :next TimeLeft.next))
+
+;; The dynamic status of switches
+(declare-fun SwitchIsFree (switch) Bool)
+(declare-fun SwitchIsFree.next (switch) Bool)
+(define-fun SwitchIsFree-current-next ((s switch)) Bool (! (SwitchIsFree s) :next SwitchIsFree.next))
+
+;; The dynamic position of switches
+(declare-fun SwitchIsRvrs (switch) Bool)
+(declare-fun SwitchIsRvrs.next (switch) Bool)
+(define-fun SwitchIsRvrs-current-next ((s switch)) Bool (! (SwitchIsRvrs s) :next SwitchIsRvrs.next)) 
+
+(define-fun SwitchUsedBy ((k switch) (j route)) Bool (or (SwitchReqDrctBy k j) (SwitchReqRvrsBy k j)))
+
+;;-----------------------------------------------------------------------------
+;;
+;; declaration of initial condition: station at rest
+;;
+;;-----------------------------------------------------------------------------
+
+(define-fun init () Bool
+  (!
+   (forall ((i track) ;  tracks
+	    (j route) ;  routes
+	    (k switch) ;  switches
+	    )
+		(and
+	    (=> (and (IsTrackOfSwitch i k) (TrackUsedBy i j))
+		(SwitchUsedBy k j))
+		(not (and (SwitchReqDrctBy k j) (SwitchReqRvrsBy k j)))
+		(TrackIsFree i)
+		(SwitchIsFree k)
+		(and
+		 (not (RouteIsActive j))
+		 (not (RouteIsReady j))
+		 (= ( TimeLeft j) 0)
+		 )
+	    )
+	   )
+   :init true)
+  )
+
+
+(define-fun axiom () Bool 
+(!
+	(forall ((i track) (i1 track) (k switch))
+	   (and
+	    (=> (and (IsTrackOfSwitch i k)
+		     (IsTrackOfSwitch i1 k))
+		(= i i1))
+	   ))
+:axiom true))
+
+;-----------------------------------------------------------------------------
+;; If can go active, go active.
+;; If active, go inactive.
+;; try to generalized to "liberazione elastica" 
+;;-----------------------------------------------------------------------------
+
+;; If not active and all used tracks are free, then go active and lock them.
+;;
+(define-fun rule_go_active () Bool
+ (!
+  (exists ((x1 route)) ; the route
+          (forall ((i track) ; tracks
+		   (j route) ; routes
+		   (k switch)); switches
+            	(and
+					(not ( RouteIsActive x1))
+					(=>
+						(TrackUsedBy i x1)
+						( TrackIsFree i))
+					(=>
+						(SwitchUsedBy k x1)
+						( SwitchIsFree k))
+						(ite (= j x1)
+							(> ( TimeLeft.next j) 0)
+							(= ( TimeLeft.next j) ( TimeLeft j)))
+						(ite (= j x1)
+							( RouteIsActive.next j)
+							(= ( RouteIsActive.next j) ( RouteIsActive j)))
+						(= ( RouteIsReady.next j) ( RouteIsReady j))
+						(ite (TrackUsedBy i x1)
+							(not ( TrackIsFree.next i))
+							(= ( TrackIsFree.next i) ( TrackIsFree i)))
+						(ite (SwitchUsedBy k x1)
+							(not ( SwitchIsFree.next k))
+							(= ( SwitchIsFree.next k) ( SwitchIsFree k)))
+						(= ( SwitchIsFree.next k) ( SwitchIsFree k))
+					)))
+  :trans true))
+
+;; Operate switch that are requested direct
+;;
+(define-fun rule_operate_switch_drct () Bool
+  (!
+  (exists ((x1 route) ; the route 
+	   (s1 switch)); the switch
+          (forall ((i track) ; tracks
+		   (j route) ; routes
+		   (k switch)); switch
+		  (and
+		   ( RouteIsActive x1)
+		   (SwitchReqDrctBy s1 x1)
+		   ( SwitchIsRvrs s1)
+		       (= ( SwitchIsFree.next k) ( SwitchIsFree k))
+		       (ite (= k s1)
+			    (not ( SwitchIsRvrs.next k))
+			    (= ( SwitchIsRvrs.next k) ( SwitchIsRvrs k)))
+		       (= ( TrackIsFree.next i) ( TrackIsFree i))
+		       (and
+			(= ( RouteIsActive.next j) ( RouteIsActive j))
+			(= ( RouteIsReady.next j) ( RouteIsReady j))
+			(= ( TimeLeft.next j) ( TimeLeft j)))
+		   )))
+  :trans true))
+
+;; Operate switch that are requested reverse
+;;
+(define-fun rule_operate_switch_rvrs () Bool
+  (!
+  (exists ((x1 route) ; the route 
+	   (s1 switch)); the switch
+          (forall ((i track) ; tracks
+		   (j route) ; routes
+		   (k switch)); switch
+		  (and
+		   ( RouteIsActive x1)
+		   (SwitchReqRvrsBy s1 x1)
+		   (not ( SwitchIsRvrs s1))
+		       (= ( SwitchIsFree.next k) ( SwitchIsFree k))
+		       (ite (= k s1)
+			    ( SwitchIsRvrs.next k)
+			    (= ( SwitchIsRvrs.next k) ( SwitchIsRvrs k)))
+		       (= ( TrackIsFree.next i) ( TrackIsFree i))
+		       (and
+			(= ( RouteIsActive.next j) ( RouteIsActive j))
+			(= ( RouteIsReady.next j) ( RouteIsReady j))
+			(= ( TimeLeft.next j) ( TimeLeft j)))
+		   )
+		  )
+	  )
+  :trans true))
+
+;; Go ready
+;; When all the switches are in the proper position, go ready
+;;
+(define-fun rule_go_ready () Bool
+  (!
+  (exists ((x1 route)) ; the route 
+          (forall ((i track) ; tracks
+		   (j route) ; routes
+		   (k switch)); switches
+		  (and
+		   ( RouteIsActive x1)
+		   (not ( RouteIsReady x1))
+		   (=> (SwitchReqRvrsBy k x1)
+		       ( SwitchIsRvrs k))
+		   (=> (SwitchReqDrctBy k x1)
+		       (not ( SwitchIsRvrs k)))
+		       (ite (= j x1)
+			    ( RouteIsReady.next j)
+			    (= ( RouteIsReady.next j) ( RouteIsReady j)))
+		       (and 
+			(= ( RouteIsActive.next j) ( RouteIsActive j))
+			(= ( TimeLeft.next j) ( TimeLeft j)))
+		       (= ( TrackIsFree.next i) ( TrackIsFree i))
+		       (= ( SwitchIsFree.next k) ( SwitchIsFree k))
+		   )
+		  )
+	  )
+  :trans true))
+
+
+;; Tick all timers that are currently ready (train passing)
+;; s active process with minimum timer and decremented by amount
+;; that is lower than or equal to minimum active timer
+;; Can MCMT deal with it? Looks like we can (smile)
+;;
+(define-fun rule_wait () Bool
+ (!
+  (exists ((x1 route)) ; the route 
+          (forall ((i track) ; tracks
+		   (j route) ; routes
+		   (k switch)); switch
+		  (and
+		   ( RouteIsActive x1)
+		   ( RouteIsReady x1)
+		   (< 0 delta) (<= delta ( TimeLeft x1))
+		   (=> ( RouteIsActive j) ; pick a delta
+		       (<= delta ( TimeLeft j)))
+			    ; decrement the timer of active routes
+		       (ite ( RouteIsActive j); the timers of the other routes do not change
+			    (= ( TimeLeft.next j) (- ( TimeLeft j) delta))
+			    (= ( TimeLeft.next j) ( TimeLeft j)))
+		       (and
+			(= ( RouteIsActive.next j) ( RouteIsActive j))
+			(= ( RouteIsReady.next j) ( RouteIsReady j))) ; the routes do not change state
+		       (= ( TrackIsFree.next i) ( TrackIsFree i)); tracks to not change state
+		       (= ( SwitchIsFree.next k) ( SwitchIsFree k))
+		       (= ( SwitchIsFree.next k) ( SwitchIsFree k))
+		   )))
+  :trans true))
+
+
+;; Go inactive
+;;
+;; If active and timer expired, free used tracks and go active
+;;
+(define-fun rule_go_inactive () Bool
+(!
+  (exists ((x1 route)) ; the route
+          (forall ((i track) ; tracks
+		   (j route) ; routes
+		   (k switch)); switches
+                  (and
+		   ( RouteIsActive x1)
+		   ( RouteIsReady x1)
+		   (= ( TimeLeft x1) 0)
+		       (ite (= j x1)
+			    (and
+			     (not ( RouteIsActive.next j))
+			     (not ( RouteIsReady.next j)))
+			    (and
+			     (= ( RouteIsActive.next j) ( RouteIsActive j))
+			     (= ( RouteIsReady.next j) ( RouteIsReady j))))
+		       (= ( TimeLeft.next j) ( TimeLeft j))
+		       (ite (TrackUsedBy i x1)
+			    ( TrackIsFree.next i)
+			    (= ( TrackIsFree.next i) ( TrackIsFree i)))
+		       (ite (SwitchUsedBy k x1)
+			    ( SwitchIsFree.next k)
+			    (= ( SwitchIsFree.next k) ( SwitchIsFree k)))
+		       (= ( SwitchIsFree.next k) ( SwitchIsFree k))
+		   )
+		  )
+	  )
+  :trans true))
+
+
+;;-----------------------------------------------------------------------------
+;; invariant properties
+;;-----------------------------------------------------------------------------
+
+
+;; Mutual exclusion due to tracks and switches
+;; switches should be sufficient, but currently are not
+;;
+(define-fun prop9 () Bool
+  (!
+   (forall ((x1 route) (x2 route) (i track) (k switch))
+	       (not (and ( RouteIsActive x1) ( RouteIsActive x2))))
+   :invar-property 0)
+  )
+
+
+
