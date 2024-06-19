@@ -3,7 +3,7 @@ from pysmt.smtlib.parser import SmtLibParser
 from collections import namedtuple
 
 TransitionSystem = namedtuple('TransitionSystem',
-                              ['statevars', 'init',
+                              ['statevars', 'init', 'axioms',
                                'trans', 'trans_guard', 'prop', 'index_type'])
 
 def get_ts(opts, file_name):
@@ -31,12 +31,19 @@ def get_ts(opts, file_name):
     assert len(ann.all_annotated_formulae('init')) == 1
     init = ann.all_annotated_formulae('init').pop()
 
-    assert len(ann.all_annotated_formulae('action').union(ann.all_annotated_formulae('rule'))) > 0
-    trans = ann.all_annotated_formulae('action').union(ann.all_annotated_formulae('rule'))
+    assert len(ann.all_annotated_formulae('action').union(ann.all_annotated_formulae('trans'))) > 0
+    trans = ann.all_annotated_formulae('action').union(ann.all_annotated_formulae('trans'))
+
+    axioms = ann.all_annotated_formulae('axiom')
+    f_vars = ann.all_annotated_formulae('rigid')
+    for f in f_vars:
+        f_next = Symbol(f.name(), f.get_type())
+        vars.add((f, f_next))
+        axioms.add(Equals(f, f_next))
 
     assert len(ann.all_annotated_formulae('invar-property')) >= 1
     prop = ann.all_annotated_formulae('invar-property', value = str(opts.vmt_property)).pop()
-    return TransitionSystem(vars, init, trans, TRUE(), prop, indextp)
+    return TransitionSystem(vars, init, axioms, trans, TRUE(), prop, indextp)
 
 def main(opts):    
     ts = get_ts(opts, opts.vmt_file)
