@@ -36,8 +36,6 @@ class subs_new_vars(IdentityDagWalker):
         
         f = formula.function_name()
         if f in self.statevarsmap:
-            print(formula.args()[0].function_name())
-            print(toint_decl.symbol_name())
             assert formula.args()[0].function_name() == toint_decl
             var = formula.args()[0].args()[0]
             return Function(self.statevarsmap[f], [var]) 
@@ -868,24 +866,9 @@ if __name__ == "__main__":
     f = open(sys.argv[1])
     data = f.read()
     ts = parser.parse(data)
-    print(ts.init.serialize())
-    print(ts.prop.serialize())
-    for x in ts.trans_rules:
-        print(x.serialize())
-    ts = translate_int_index(ts, True)
-
-    print('---')
-    
-    print(ts.init.serialize())
-    print(ts.prop.serialize())
-    for x in ts.trans_rules:
-        print(x.serialize())
-    print('---')
-    
+    ts = translate_int_index(ts, True)    
     ts = change_statevars(ts)
-    print(ts.init.serialize())
-    print(ts.prop.serialize())
-    for x in ts.trans_rules:
-        print(x.serialize())    
-    print('-----------------')
+    from ts2vmt import Printer
+    printer = Printer(ts)
+    printer.print_ts()
     
