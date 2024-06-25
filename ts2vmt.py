@@ -1,4 +1,5 @@
 from collections import namedtuple
+from pysmt.shortcuts import to_smtlib
 
 ParametricTransitionSystem = namedtuple(
     'ParametricTransitionSystem',
@@ -29,30 +30,30 @@ class Printer:
                         + ") Bool (! (" + new_name + " " + " ".join(["V" + str(i) for i in range(len(ar))]) + ") :next " + next_name + "))")
             else:
                 new_name = "_0__" + var.symbol_name()
-                print("(declare-const " + new_name + " " + var.sort.symbol_name() + ")")
-                next_name = "_1__" + var.symbol_name()
-                print("(declare-const " + next_name + " " + var.sort.symbol_name() + ")")            
-                print("(define-fun " + new_name + ".sv" + " () " + var.sort.symbol_name() + " (! " + new_name + " :next " + next_name + "))")
+                print("(declare-const " + new_name + " " + var.get_type().name + ")")
+                next_name = "_1__" + var_next.symbol_name()
+                print("(declare-const " + next_name + " " + var.get_type().name + ")")            
+                print("(define-fun " + new_name + ".sv" + " () " + var.get_type().name + " (! " + new_name + " :next " + next_name + "))")
 
     def print_axioms(self):
         axioms = self.ts.axioms
         for i, axiom in enumerate(axioms):
-            annotated_axiom_smtlib = f"(! {axiom.simplify().serialize()} :axiom true)"
+            annotated_axiom_smtlib = f"(! {to_smtlib(axiom.simplify())} :axiom true)"
             print(f"(define-fun axiom_{i} () Bool {annotated_axiom_smtlib})")
 
     def print_inits(self):
         init = self.ts.init
-        print(f"(define-fun init () Bool (! {init.simplify().serialize()} :init true))")
+        print(f"(define-fun init () Bool (! {to_smtlib(init.simplify())} :init true))")
 
     def print_transitions(self):
         transitions = self.ts.trans_rules
         for i, transition in enumerate(transitions):
-            annotated_transition_formula = f"(! {transition.simplify().serialize()} :action true)"
+            annotated_transition_formula = f"(! {to_smtlib(transition.simplify())} :action true)"
             print(f"(define-fun transition_{i} () Bool {annotated_transition_formula})")
 
     def print_safety(self):
         safety = self.ts.prop
-        print(f"(define-fun safety-prop () Bool (! {safety.simplify().serialize()} :invar-property 0))")
+        print(f"(define-fun safety-prop () Bool (! {to_smtlib(safety.simplify())} :invar-property 0))")
 
     def print_ts(self):
         self.print_sorts()

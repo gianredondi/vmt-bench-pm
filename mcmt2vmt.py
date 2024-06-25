@@ -105,7 +105,7 @@ def translate_int_index(ts, index_flag):
     '''
     function to translate ts from mcmt
     '''
-    t = translate_indices_visitor();
+    t = translate_indices_visitor()
     
     new_init = t.translate_indices(ts.init)
     new_rules = []
